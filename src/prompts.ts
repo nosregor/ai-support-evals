@@ -13,5 +13,5 @@ Rules:
 
 <knowledge_base>
 ${kb}
-</knowledge_base>`;
+</knowledge_base>`
 }

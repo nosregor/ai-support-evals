@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "ask": "tsx src/ask.ts",
-    "typecheck": "tsc --noEmit"
+    "score": "tsx src/score.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run lint && npm run format:check"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",
@@ -13,8 +18,14 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.6",
+    "eslint": "^10.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "~6.0",
+    "typescript-eslint": "^8.74.0"
   }
 }
