@@ -8,23 +8,15 @@ export const AssistantOutputSchema = z.object({
 })
 export type AssistantOutput = z.infer<typeof AssistantOutputSchema>
 
-// What answer() returns: the model output plus measurements for the eval.
-export type AssistantResult = AssistantOutput & {
-  latencyMs: number
-  inputTokens: number
-  outputTokens: number
-}
+// What answer() returns: the model output plus how long it took.
+export type AssistantResult = AssistantOutput & { latencyMs: number }
 
 // A variant is one combination of prompt + model settings we want to compare.
-// `temperature` is used by Ollama; current Claude models reject it and use
-// `effort` (how much the model thinks) instead.
-export type Effort = 'low' | 'medium' | 'high'
 export type Variant = {
   name: string
   model: string
   systemPrompt: (knowledgeBase: string) => string
-  effort: Effort
-  temperature: number
+  temperature: number // 0 = as repeatable as possible
 }
 
 // One test case in the golden dataset. "Golden" = we trust these as the

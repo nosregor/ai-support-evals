@@ -1,5 +1,4 @@
 // Turns per-case results into a summary, and prints it.
-import { PRICING } from './config.js'
 import type { AssistantOutput, Category, Score } from './types.js'
 
 export type CaseResult = {
@@ -10,65 +9,40 @@ export type CaseResult = {
   scores: Score[]
   pass: boolean // every scorer passed (and no error)
   latencyMs: number
-  inputTokens: number
-  outputTokens: number
   error?: string
 }
 
-export type Summary = {
-  cases: number
-  passed: number
-  passRate: number
-  byCategory: Record<string, { cases: number; passed: number; passRate: number }>
-  byScorer: Record<string, { runs: number; avgScore: number; passRate: number }>
-  avgLatencyMs: number
-  totalInputTokens: number
-  totalOutputTokens: number
-  estimatedCostUsd: number
-}
+type Tally = { total: number; passed: number; scoreSum: number }
 
-const rate = (passed: number, total: number) => (total ? passed / total : 0)
-const pct = (n: number) => `${(n * 100).toFixed(0)}%`.padStart(5)
+const pct = (passed: number, total: number) => `${Math.round((passed / total) * 100)}%`.padStart(5)
 
-export function summarize(results: CaseResult[], model: string): Summary {
-  const byCategory: Summary['byCategory'] = {}
-  const scorerTotals: Record<string, { runs: number; total: number; passed: number }> = {}
-
+export function summarize(results: CaseResult[]) {
+  // Pass rate per category: how many test cases passed in each group.
+  const byCategory: Record<string, Tally> = {}
   for (const r of results) {
-    const cat = (byCategory[r.category] ??= { cases: 0, passed: 0, passRate: 0 })
-    cat.cases++
-    if (r.pass) cat.passed++
-    for (const s of r.scores) {
-      const t = (scorerTotals[s.name] ??= { runs: 0, total: 0, passed: 0 })
-      t.runs++
-      t.total += s.score
-      if (s.pass) t.passed++
-    }
-  }
-  for (const cat of Object.values(byCategory)) cat.passRate = rate(cat.passed, cat.cases)
-
-  const byScorer: Summary['byScorer'] = {}
-  for (const [name, t] of Object.entries(scorerTotals)) {
-    byScorer[name] = { runs: t.runs, avgScore: t.total / t.runs, passRate: rate(t.passed, t.runs) }
+    const t = (byCategory[r.category] ??= { total: 0, passed: 0, scoreSum: 0 })
+    t.total++
+    if (r.pass) t.passed++
   }
 
-  const passed = results.filter((r) => r.pass).length
-  const totalInputTokens = results.reduce((n, r) => n + r.inputTokens, 0)
-  const totalOutputTokens = results.reduce((n, r) => n + r.outputTokens, 0)
-  const price = PRICING[model] ?? { input: 0, output: 0 }
+  // Per scorer: how often it passed and its average score, across all cases.
+  const byScorer: Record<string, Tally> = {}
+  for (const s of results.flatMap((r) => r.scores)) {
+    const t = (byScorer[s.name] ??= { total: 0, passed: 0, scoreSum: 0 })
+    t.total++
+    if (s.pass) t.passed++
+    t.scoreSum += s.score
+  }
 
   return {
     cases: results.length,
-    passed,
-    passRate: rate(passed, results.length),
+    passed: results.filter((r) => r.pass).length,
     byCategory,
     byScorer,
-    avgLatencyMs: Math.round(results.reduce((n, r) => n + r.latencyMs, 0) / (results.length || 1)),
-    totalInputTokens,
-    totalOutputTokens,
-    estimatedCostUsd: (totalInputTokens * price.input + totalOutputTokens * price.output) / 1e6,
+    avgLatencyMs: Math.round(results.reduce((n, r) => n + r.latencyMs, 0) / results.length),
   }
 }
+export type Summary = ReturnType<typeof summarize>
 
 export function printCase(r: CaseResult) {
   console.log(`${r.pass ? '✅' : '❌'} ${r.id}  "${r.input}"`)
@@ -81,31 +55,26 @@ export function printCase(r: CaseResult) {
 }
 
 export function printSummary(s: Summary, results: CaseResult[]) {
-  console.log(`\nOverall: ${s.passed}/${s.cases} cases passed (${pct(s.passRate).trim()})\n`)
+  console.log(`\nOverall: ${s.passed}/${s.cases} cases passed (${pct(s.passed, s.cases).trim()})\n`)
 
   console.log('Category        Pass rate')
-  for (const [name, c] of Object.entries(s.byCategory)) {
-    console.log(`${name.padEnd(15)} ${pct(c.passRate)}  (${c.passed}/${c.cases})`)
+  for (const [name, t] of Object.entries(s.byCategory)) {
+    console.log(`${name.padEnd(15)} ${pct(t.passed, t.total)}  (${t.passed}/${t.total})`)
   }
 
   console.log('\nScorer                Avg score  Pass rate')
-  for (const [name, sc] of Object.entries(s.byScorer)) {
-    console.log(`${name.padEnd(21)} ${sc.avgScore.toFixed(2).padStart(9)}  ${pct(sc.passRate)}`)
+  for (const [name, t] of Object.entries(s.byScorer)) {
+    const avg = (t.scoreSum / t.total).toFixed(2).padStart(9)
+    console.log(`${name.padEnd(21)} ${avg}  ${pct(t.passed, t.total)}`)
   }
-
-  console.log(
-    `\nAvg latency ${s.avgLatencyMs} ms · tokens ${s.totalInputTokens} in / ${s.totalOutputTokens} out` +
-      ` · est. assistant cost $${s.estimatedCostUsd.toFixed(4)} (judge calls not included)`,
-  )
+  console.log(`\nAverage answer time: ${s.avgLatencyMs} ms`)
 
   const failed = results.filter((r) => !r.pass)
-  if (failed.length) {
-    console.log(`\nFailed cases (${failed.length}):`)
-    for (const r of failed) {
-      const reasons = r.error
-        ? [`error: ${r.error}`]
-        : r.scores.filter((sc) => !sc.pass).map((sc) => `${sc.name}: ${sc.reason}`)
-      console.log(`  ${r.id}\n    - ${reasons.join('\n    - ')}`)
-    }
+  if (failed.length) console.log(`\nFailed cases (${failed.length}):`)
+  for (const r of failed) {
+    const reasons = r.error
+      ? [`error: ${r.error}`]
+      : r.scores.filter((sc) => !sc.pass).map((sc) => `${sc.name}: ${sc.reason}`)
+    console.log(`  ${r.id}\n    - ${reasons.join('\n    - ')}`)
   }
 }

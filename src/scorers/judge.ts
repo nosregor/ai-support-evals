@@ -4,21 +4,19 @@
 import { z } from 'zod'
 
 import { knowledgeBase } from '../assistant.js'
-import { JUDGE_MODEL, JUDGE_PASS_MIN, LLM_MODE } from '../config.js'
-import { mockJudge } from '../offline/mock-judge.js'
-import { structuredChat } from '../providers/llm.js'
+import { JUDGE_MODEL, JUDGE_PASS_MIN } from '../config.js'
+import { askLlama } from '../llm.js'
 import type { AssistantOutput, GoldenCase, Score } from '../types.js'
 
 // `reasoning` comes first on purpose: the model writes its reasoning before
 // choosing numbers, which tends to give more considered scores.
 const rating = z.number().int().min(1).max(5)
-export const JudgeSchema = z.object({
+const JudgeSchema = z.object({
   reasoning: z.string(),
   faithfulness: rating,
   helpfulness: rating,
   tone: rating,
 })
-export type JudgeRatings = z.infer<typeof JudgeSchema>
 
 // A fixed, written rubric makes scores comparable between runs. Vague
 // instructions ("rate the quality") give noisy, drifting scores.
@@ -41,23 +39,17 @@ ${knowledgeBase}
 </knowledge_base>`
 
 export async function judgeScores(c: GoldenCase, out: AssistantOutput): Promise<Score[]> {
-  const ratings =
-    LLM_MODE === 'offline'
-      ? mockJudge(c, out)
-      : (
-          await structuredChat({
-            model: JUDGE_MODEL,
-            system: RUBRIC,
-            user: [
-              `<customer_message>${c.input}</customer_message>`,
-              `<expected_behavior>${c.expectedBehavior}</expected_behavior>`,
-              `<reply escalate="${out.escalate}">${out.reply}</reply>`,
-            ].join('\n'),
-            schema: JudgeSchema,
-            temperature: 0, // as consistent as possible
-            effort: 'medium',
-          })
-        ).output
+  const ratings = await askLlama({
+    model: JUDGE_MODEL,
+    system: RUBRIC,
+    user: [
+      `<customer_message>${c.input}</customer_message>`,
+      `<expected_behavior>${c.expectedBehavior}</expected_behavior>`,
+      `<reply escalate="${out.escalate}">${out.reply}</reply>`,
+    ].join('\n'),
+    schema: JudgeSchema,
+    temperature: 0, // as consistent as possible
+  })
 
   const criteria = ['faithfulness', 'helpfulness', 'tone'] as const
   return criteria.map((key) => ({

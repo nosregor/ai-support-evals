@@ -9,29 +9,16 @@ installer. All company data is made up.
 
 ## Setup
 
-Requires Node.js 20+.
-
-```bash
-npm install
-cp .env.example .env
-```
-
-## Choose a mode
-
-Set `LLM_MODE` in `.env` (or per command, e.g. `LLM_MODE=ollama npm run eval`).
-
-| Mode                | What answers and judges       | Needs                                      |
-| ------------------- | ----------------------------- | ------------------------------------------ |
-| `offline` (default) | Rule-based stand-ins, instant | Nothing                                    |
-| `ollama`            | Llama, running locally        | [Ollama](https://ollama.com) (see below)   |
-| `live`              | Claude via the Anthropic API  | `ANTHROPIC_API_KEY`, company-approved only |
-
-To use Llama:
+Requires Node.js 20+ and [Ollama](https://ollama.com), which runs Llama locally:
+free, private, and no API key.
 
 ```bash
 brew install ollama
 ollama serve                # keep running in a separate terminal
 ollama pull llama3.1:8b     # ~5 GB, one-time download
+
+npm install
+cp .env.example .env        # optional: change the model or judge model
 ```
 
 ## Run it
@@ -45,20 +32,20 @@ npm run eval -- --id faq-02 --verbose            # one case, with every scorer's
 npm run check                                    # typecheck + lint + format check
 ```
 
-`eval` prints the overall pass rate, pass rate per category and per scorer, latency,
-tokens and estimated cost, then lists each failed case with reasons:
+A full run takes about 3 minutes. It prints the overall pass rate, pass rate per
+category and per scorer, and lists each failed case with reasons:
 
 ```
-Overall: 14/30 cases passed (47%)
+Overall: 23/30 cases passed (77%)
 
 Category        Pass rate
-faq               38%  (3/8)
-out_of_scope       0%  (0/3)
+faq              100%  (8/8)
+out_of_scope      33%  (1/3)
+adversarial        0%  (0/4)
 ...
-Failed cases (16):
-  faq-02
-    - escalationCorrect: expected escalate=false, got true
-    - containsRequired: missing: electrical panel
+Failed cases (7):
+  billing-02
+    - containsRequired: missing: 80%
 ```
 
 Every run is saved to `results/<timestamp>_<variant>.json` with the settings, the
@@ -76,7 +63,8 @@ summary and each case's reply and scores. Results are gitignored.
    - `safety.ts`: for attack cases only, checks the assistant resisted
 
 Use code checks wherever possible (free, fast, consistent) and the AI judge only for
-what code can't check. In `offline` mode the judges are crude heuristics; read some
+what code can't check. By default Llama grades its own answers, which makes it a lenient
+judge: set `OLLAMA_JUDGE_MODEL` to a stronger model if you have one, and read some
 "passes" yourself before trusting any eval.
 
 ## Add a test case
@@ -103,12 +91,13 @@ the tests can't drift from the facts the assistant uses.
 ```
 data/            knowledge base + golden dataset
 src/
-  assistant.ts   the assistant
-  prompts.ts     system prompts
-  scorers/       code, AI judge, safety
-  providers/     Ollama and Claude clients
-  offline/       rule-based stand-ins for offline mode
-  runner.ts      runs the eval (npm run eval)
+  runner.ts      the eval: runs every case and scores it (npm run eval)
+  assistant.ts   the assistant being tested
+  scorers/       code checks, AI judge, safety judge
+  dataset.ts     loads and validates the test cases
   report.ts      summary and printing
   experiments.ts named variants (prompt + model + settings)
+  prompts.ts     system prompts
+  llm.ts         calls Llama via Ollama
+  config.ts      model names and settings
 ```
