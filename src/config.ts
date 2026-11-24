@@ -13,7 +13,6 @@ export const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 export const MODELS = {
   haiku: 'claude-haiku-5-5',
   sonnet: 'claude-sonnet-5-5',
-  opus: 'claude-opus-5-5',
   llama: process.env.OLLAMA_MODEL ?? 'llama3.1:8b',
 } as const
 
@@ -33,7 +32,6 @@ export const JUDGE_PASS_MIN = 4
 export const PRICING: Record<string, { input: number; output: number }> = {
   [MODELS.haiku]: { input: 0.1, output: 0.5 },
   [MODELS.sonnet]: { input: 2, output: 10 },
-  [MODELS.opus]: { input: 4, output: 20 },
   [MODELS.llama]: { input: 0, output: 0 }, // runs locally
 }
 

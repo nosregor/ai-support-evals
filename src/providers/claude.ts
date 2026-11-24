@@ -5,10 +5,6 @@ import type { z } from 'zod'
 
 import type { ChatOptions, ChatResult } from './llm.js'
 
-// Thrown when Claude's safety system declines a request. The caller decides
-// what that means (the assistant hands over to a human; a judge records an error).
-export class RefusalError extends Error {}
-
 // Created on first use, so other modes never need credentials.
 let client: Anthropic | undefined
 
@@ -28,7 +24,7 @@ export async function claudeChat<S extends z.ZodType>(
     output_config: { effort: opts.effort, format: zodOutputFormat(opts.schema) },
   })
 
-  if (response.stop_reason === 'refusal') throw new RefusalError('Claude declined the request')
+  if (response.stop_reason === 'refusal') throw new Error('Claude declined the request')
   if (response.parsed_output == null) {
     throw new Error(`Model did not return valid JSON (stop_reason: ${response.stop_reason})`)
   }

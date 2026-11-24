@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "ask": "tsx src/ask.ts",
-    "score": "tsx src/score.ts",
+    "eval": "tsx src/runner.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
